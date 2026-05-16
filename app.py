@@ -1,148 +1,35 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-import zipfile
 
-os.system('pip install gradio tensorflow opencv-python-headless numpy scikit-learn seaborn matplotlib')
+os.system('pip install gradio tensorflow opencv-python-headless numpy Pillow')
 
 import tensorflow as tf
-from tensorflow.keras import layers, models, callbacks
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
-from PIL import Image
-from tensorflow.keras.preprocessing import image
 import gradio as gr
+from PIL import Image
 
-if not os.path.exists("archive.zip"):
-    print("Error: Please upload archive.zip to your GitHub repository.")
+model_path = 'plant_expert_model.h5'
+
+if os.path.exists(model_path):
+    print("🚀 Loading pre-trained model...")
+    model = tf.keras.models.load_model(model_path)
+else:
+    print("❌ Error: plant_expert_model.h5 not found! Please upload it to GitHub.")
     sys.exit(1)
 
-with zipfile.ZipFile("archive.zip", 'r') as zip_ref:
-    zip_ref.extractall("dataset")
-
-print("تم فك الضغط بنجاح في مجلد dataset!")
-
-data_dir = 'dataset/plantvillage dataset/color'
-
-train_ds = tf.keras.utils.image_dataset_from_directory(
-  data_dir,
-  validation_split=0.2,
-  subset="training",
-  seed=123,
-  image_size=(224, 224),
-  batch_size=32)
-
-val_ds = tf.keras.utils.image_dataset_from_directory(
-  data_dir,
-  validation_split=0.2,
-  subset="validation",
-  seed=123,
-  image_size=(224, 224),
-  batch_size=32)
-
-class_names = train_ds.class_names
-print(f"✅ Setup Complete: Found {len(class_names)} classes.")
-
-base_model = tf.keras.applications.MobileNetV2(
-    input_shape=(224, 224, 3),
-    include_top=False,
-    weights='imagenet'
-)
-base_model.trainable = False  
-data_augmentation = tf.keras.Sequential([
-  layers.RandomFlip("horizontal_and_vertical"),
-  layers.RandomRotation(0.2),
-])
-
-model = models.Sequential([
-    layers.Input(shape=(224, 224, 3)),
-    layers.Rescaling(1./255), 
-    base_model,
-    layers.GlobalAveragePooling2D(),
-    layers.Dropout(0.2), 
-    layers.Dense(len(class_names), activation='softmax') 
-])
-
-model.compile(
-    optimizer='adam',
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
-)
-
-early_stop = callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
-
-print("🚀 Starting Professional Training...")
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=7,
-    callbacks=[early_stop]
-)
-
-model.save('plant_expert_model.h5')
-print("✅ Training Finished and Model Saved!")
-
-acc = history.history['accuracy']
-val_acc = history.history['val_accuracy']
-loss = history.history['loss']
-val_loss = history.history['val_loss']
-
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(acc, label='Training Accuracy', color='blue')
-plt.plot(val_acc, label='Validation Accuracy', color='orange')
-plt.title('Model Accuracy')
-plt.xlabel('Epochs')
-plt.ylabel('Accuracy')
-plt.legend()
-
-plt.subplot(1, 2, 2)
-plt.plot(loss, label='Training Loss', color='blue')
-plt.plot(val_loss, label='Validation Loss', color='orange')
-plt.title('Model Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.savefig('performance_curves.png')
-plt.close()
-
-all_true_labels = []
-all_predictions = []
-
-for images_batch, labels_batch in val_ds:
-    all_true_labels.extend(labels_batch.numpy())
-    preds = model.predict(images_batch, verbose=0) 
-    all_predictions.extend(np.argmax(preds, axis=1))
-
-all_true_labels = np.array(all_true_labels)
-all_predictions = np.array(all_predictions)
-
-cm = confusion_matrix(all_true_labels, all_predictions)
-
-plt.figure(figsize=(20, 18))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
-plt.xlabel('Predicted Label')
-plt.ylabel('True Label')
-plt.title('Confusion Matrix')
-plt.xticks(rotation=90)
-plt.yticks(rotation=0)
-plt.tight_layout()
-plt.savefig('confusion_matrix.png')
-plt.close()
-
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        print("GPU is available ✅")
-        print("Using:", gpus[0])
-    except RuntimeError as e:
-        print(e)
-else:
-    print("GPU is NOT available ❌")
+class_names = [
+    'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
+    'Blueberry___healthy', 'Cherry___Powdery_mildew', 'Cherry___healthy', 'Corn___Cercospora_leaf_spot',
+    'Corn___Common_rust', 'Corn___Northern_Leaf_Blight', 'Corn___healthy', 'Grape___Black_rot',
+    'Grape___Esca_(Black_Measles)', 'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)', 'Grape___healthy',
+    'Orange___Haunglongbing_(Citrus_greening)', 'Peach___Bacterial_spot', 'Peach___healthy',
+    'Pepper,_bell___Bacterial_spot', 'Pepper,_bell___healthy', 'Potato___Early_blight', 'Potato___Late_blight',
+    'Potato___healthy', 'Raspberry___healthy', 'Soybean___healthy', 'Squash___Powdery_mildew',
+    'Strawberry___Leaf_scorch', 'Strawberry___healthy', 'Tomato___Bacterial_spot', 'Tomato___Early_blight',
+    'Tomato___Late_blight', 'Tomato___Leaf_Mold', 'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites_Two-spotted_spider_mite',
+    'Tomato___Target_Spot', 'Tomato___Tomato_Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus', 'Tomato___healthy'
+]
 
 disease_advice = {
     "healthy": "Your plant is healthy. Continue proper watering, sunlight, and regular monitoring.",
@@ -201,23 +88,27 @@ def predict_disease(img, location):
     if img is None:
         return "<div style='text-align:center; padding:20px; color:red;'>Please upload an image.</div>"
     img = img.resize((224, 224))
-    img_array = image.img_to_array(img)
+    img_array = np.array(img, dtype=np.float32)
     if img_array.shape[-1] == 4:
         img_array = img_array[..., :3]
     img_array = np.expand_dims(img_array, axis=0)
+    
     predictions = model.predict(img_array, verbose=0)
     score = predictions[0]
     class_idx = np.argmax(score)
     label = class_names[class_idx]
     confidence = float(score[class_idx]) * 100
     clean_label = label.replace("___", " ")
+    
     if "healthy" in label.lower():
         status = "🌱 HEALTHY"
         status_color = "green"
     else:
         status = "⚠️ DISEASE DETECTED"
         status_color = "red"
+        
     advice = get_advice(label)
+    
     result = f"""
     <div style="padding:20px; border-radius:15px; background-color:#f8f9fa; border:1px solid #dcdcdc; font-family:Arial, sans-serif;">
     <h2 style="text-align:center; color:#2e7d32; margin-bottom: 20px;">🌿 Plant Disease Detection Report</h2>
@@ -235,7 +126,7 @@ def predict_disease(img, location):
     </div>
     <div style="background-color:#e9ecef; padding:15px; border-radius:10px; margin-bottom:15px;">
         <h3 style="color:#495057; margin-top:0;">📍 Plant Location:</h3>
-        <p style="font-size:18px; font-weight:bold; color:#343a40;">{location if location else 'غير محدد'}</p>
+        <p style="font-size:18px; font-weight:bold; color:#343a40;">{location if location else 'Outdoor'}</p>
     </div>
     <div style="background-color:#e9ecef; padding:15px; border-radius:10px;">
         <h3 style="color:#495057; margin-top:0;">💡 Recommended Advice:</h3>
@@ -245,11 +136,7 @@ def predict_disease(img, location):
     """
     return result
 
-theme = gr.themes.Soft(
-    primary_hue="green",
-    secondary_hue="emerald",
-    neutral_hue="slate"
-)
+theme = gr.themes.Soft(primary_hue="green", secondary_hue="emerald", neutral_hue="slate")
 
 interface = gr.Interface(
     fn=predict_disease,
@@ -259,7 +146,7 @@ interface = gr.Interface(
     ],
     outputs=gr.HTML(label="Detection Result"),
     title="GHARS🌿",
-    description="Upload an image of a plant to detect diseases and get advice.",
+    description="Welcome to GHARS: Growing smarter care for healthier plants 🌱",
     theme=theme,
     flagging_mode="never"
 )
